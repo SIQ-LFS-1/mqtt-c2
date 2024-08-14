@@ -1,0 +1,4 @@
+BROKER="MQTTServerAddress"
+PORT="MQTTPort"
+MQTT_USER="MQTTUsername"
+MQTT_PASS="MQTTPassword"
