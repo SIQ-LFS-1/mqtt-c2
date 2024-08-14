@@ -1,7 +1,5 @@
 # WEBIDENCE POC - MQTT
 
-Gitlab Link : https://gitlab.vairav.net/siq/mqtt-c2.git
-
 ## Table of Contents
 
 - [WEBIDENCE POC - MQTT](#webidence-poc---mqtt)
@@ -195,6 +193,9 @@ MQTT_PASS=password
   }
 }
 ```
+
+## Author
+[Aayush Rajthala](https://github.com/AayushRajthala99)
 
 Ensure all paths in the configuration files are correct and accessible from your scripts.
 
