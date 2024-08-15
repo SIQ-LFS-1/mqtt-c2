@@ -34,8 +34,12 @@ infoBanner()
 STATUSCODE = ["ERROR", "INFO", "SUCCESS"]
 
 
+def getNormalizedPath(pathvalue):
+    return directoryPath.normpath(pathvalue)
+
+
 def getFullPath(pathValue):
-    return directoryPath.normpath(directoryPath.abspath(pathValue))
+    return getNormalizedPath(directoryPath.abspath(pathValue))
 
 
 def isWin():
@@ -72,27 +76,14 @@ def printMessage(type, message):
 
 
 ############################################################################################
-# Assigning filepaths to a variable...
-
-envFilepath = getFullPath(".env")
-envjsonFilepath = getFullPath("credentials/env.json")
-vmInfoFilepath = getFullPath("credentials/vmInfo.json")
-topicsFilepath = getFullPath("credentials/topics.json")
-
-############################################################################################
 # Checking Dependencies...
 
 
-def checkDependencies():
+def checkDependencies(required_files):
     clear_screen()
 
-    # Define all required files
-    required_files = [envjsonFilepath, vmInfoFilepath, topicsFilepath]
-
     # Check for the existence of each required file
-    missing_files = [
-        file for file in required_files if not checkExistence(getFullPath(file))
-    ]
+    missing_files = [file for file in required_files if not checkExistence(file)]
 
     if missing_files:
         printMessage(STATUSCODE[0], "Missing Dependencies")
@@ -105,8 +96,6 @@ def checkDependencies():
     return
 
 
-checkDependencies()
-
 ############################################################################################
 # Load the .env file
 load_dotenv()
@@ -117,6 +106,23 @@ USERNAME = os.getenv("MQTT_USER")
 PASSWORD = os.getenv("MQTT_PASS")
 CLIENT_ID = f"mqtt_client_{uuid.uuid4()}"
 
+SCRIPT_PATH = os.getenv("WIN_SCRIPT_PATH") if isWin() else os.getenv("LIN_SCRIPT_PATH")
+
+if "/" == SCRIPT_PATH[-1]:
+    SCRIPT_PATH = SCRIPT_PATH[:-1]
+
+############################################################################################
+# Assigning filepaths to a variable...
+
+envFilepath = getNormalizedPath(rf"{SCRIPT_PATH}/.env")
+envjsonFilepath = getNormalizedPath(rf"{SCRIPT_PATH}/credentials/env.json")
+vmInfoFilepath = getNormalizedPath(rf"{SCRIPT_PATH}/credentials/vmInfo.json")
+topicsFilepath = getNormalizedPath(rf"{SCRIPT_PATH}/credentials/topics.json")
+
+# Define all required files
+required_files = [envFilepath, envjsonFilepath, vmInfoFilepath, topicsFilepath]
+
+checkDependencies(required_files)
 
 ############################################################################################
 # Load env.json
