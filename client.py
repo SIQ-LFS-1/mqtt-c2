@@ -1,11 +1,12 @@
 import os
+import sys
 import json
 import uuid
-import shlex
 import psutil
 import socket
 import signal
 import subprocess
+from pythonping import ping
 from datetime import datetime
 from dotenv import load_dotenv
 import paho.mqtt.client as mqtt
@@ -87,6 +88,14 @@ def getTester(ip_address):
         return VM["tester"] if ip_address in VM["hosts"] else None
 
 
+def isMQTTServerUp(host):
+    response = ping(host, count=3)
+    if response.success():
+        return True
+    else:
+        return False
+
+
 ############################################################################################
 # Checking Dependencies...
 
@@ -161,18 +170,22 @@ execution_path = directoryPath.normpath(
 
 
 ############################################################################################
+# FUNCTIONS DECLARATIONS...
+
+# def get_python_path():
+#     command = "where python" if os.name == "nt" else "which python"
+#     try:
+#         result = subprocess.check_output(command, shell=True, universal_newlines=True)
+#         result = directoryPath.normpath(result.strip())
+#         return result
+
+#     except Exception as error:
+#         print("Error finding python executable.")
+#         return None
 
 
 def get_python_path():
-    command = "where python" if os.name == "nt" else "which python"
-    try:
-        result = subprocess.check_output(command, shell=True, universal_newlines=True)
-        result = directoryPath.normpath(result.strip())
-        return result
-
-    except Exception as error:
-        print("Error finding python executable.")
-        return None
+    return sys.executable
 
 
 def get_shell_path():
@@ -328,6 +341,8 @@ def perform_operation(client, operation, tester, message=None):
         print(f"Unknown command: {operation}")
         return
 
+    publish_status_update(client, operation, tester)
+
     subprocess.Popen(
         " ".join(commandList) if isWin() else commandList,
         cwd=execution_path,
@@ -337,17 +352,42 @@ def perform_operation(client, operation, tester, message=None):
         stderr=subprocess.PIPE,
     )
 
-    publish_status_update(client, operation, tester)
-
 
 def on_connect(client, userdata, flags, rc):
-    print("Connected with result code " + str(rc))
-    client.subscribe(SUBSCRIPTION_TOPICS)
+    if rc == 0:
+        print("Successfully Connected to the MQTT Server!")
+        client.subscribe(SUBSCRIPTION_TOPICS)
+
+    else:
+        if rc == 1:
+            print("Connection Failed : unacceptable protocol version.")
+        elif rc == 2:
+            print("Connection Failed : identifier rejected.")
+        elif rc == 3:
+            print("Connection Failed : server unavailable.")
+        elif rc == 4:
+            print("Connection Failed : bad username or password.")
+        elif rc == 5:
+            print("Connection Failed : not authorized.")
+        else:
+            print(f"Connection Failed with unknown error code: {rc}")
 
 
 def on_disconnect(client, userdata, rc):
-    if rc != 0:
-        print("Unexpected disconnection.")
+    if rc == 0:
+        print("Successfully Disconnected from the MQTT Server!")
+    elif rc == 1:
+        print("Unexpected Disconnection : Protocol error.")
+    elif rc == 2:
+        print("Unexpected Disconnection : Network issue.")
+    elif rc == 3:
+        print("Unexpected Disconnection : Client disconnected by broker.")
+    elif rc == 4:
+        print("Unexpected Disconnection : Bad username or password.")
+    elif rc == 5:
+        print("Unexpected Disconnection : Not authorized.")
+    else:
+        print(f"Unexpected Disconnection : Unknown reason [ Return code: {rc} ]")
 
 
 def on_message(client, userdata, msg):
@@ -370,14 +410,34 @@ def on_message(client, userdata, msg):
 ############################################################################################
 # DRIVER CODE...
 def main():
-    client = mqtt.Client(CLIENT_ID)
-    client.username_pw_set(username=USERNAME, password=PASSWORD)
-    client.on_connect = on_connect
-    client.on_disconnect = on_disconnect
-    client.on_message = on_message
+    while True:
+        try:
+            # clear_screen()
+            printMessage(STATUSCODE[1], "Connecting to MQTT Server")
 
-    client.connect(BROKER, PORT, 60)
-    client.loop_forever()
+            client = mqtt.Client(CLIENT_ID)
+            client.username_pw_set(username=USERNAME, password=PASSWORD)
+            client.on_connect = on_connect
+            client.on_disconnect = on_disconnect
+            client.on_message = on_message
+
+            client.connect(BROKER, PORT, 60)
+            client.loop_forever()
+
+        except TimeoutError:
+            printMessage(STATUSCODE[0], "Connection Timed Out")
+            printMessage(STATUSCODE[1], "Checking Status of MQTT Server. Please Wait!")
+
+            if isMQTTServerUp(BROKER):
+                printMessage(STATUSCODE[1], "MQTT Server is ONLINE")
+            else:
+                printMessage(STATUSCODE[1], "MQTT Server is OFFLINE")
+
+            pass
+
+        except Exception as error:
+            printMessage(STATUSCODE[0], error)
+            pass
 
 
 if __name__ == "__main__":

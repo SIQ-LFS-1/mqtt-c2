@@ -21,6 +21,7 @@
     - [Example `.env` File](#example-env-file)
     - [Example `env.json` File](#example-envjson-file)
     - [Example `topics.json` File](#example-topicsjson-file)
+  - [Author](#author)
 
 ## Introduction
 

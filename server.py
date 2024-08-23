@@ -2,9 +2,8 @@ import os
 import json
 import time
 import uuid
-import signal
 import argparse
-import threading
+from pythonping import ping
 from dotenv import load_dotenv
 import paho.mqtt.client as mqtt
 from os import path as directoryPath
@@ -73,6 +72,14 @@ def printMessage(type, message):
     print(f"--[\033[1;{colorCode}m {type} \033[0m]--[ {message} ]\n")
 
     return
+
+
+def isMQTTServerUp(host):
+    response = ping(host, count=3)
+    if response.success():
+        return True
+    else:
+        return False
 
 
 ############################################################################################
@@ -153,13 +160,40 @@ SUBTOPICS = TOPICS["subtopics"]
 
 
 def on_connect(client, userdata, flags, rc):
-    print("Connected with result code " + str(rc))
-    client.subscribe((BROADCAST, 0))
+    if rc == 0:
+        print("Successfully Connected to the MQTT Server!")
+        client.subscribe((BROADCAST, 0))
+
+    else:
+        if rc == 1:
+            print("Connection Failed : unacceptable protocol version.")
+        elif rc == 2:
+            print("Connection Failed : identifier rejected.")
+        elif rc == 3:
+            print("Connection Failed : server unavailable.")
+        elif rc == 4:
+            print("Connection Failed : bad username or password.")
+        elif rc == 5:
+            print("Connection Failed : not authorized.")
+        else:
+            print(f"Connection Failed with unknown error code: {rc}")
 
 
 def on_disconnect(client, userdata, rc):
-    if rc != 0:
-        print("Unexpected disconnection.")
+    if rc == 0:
+        print("Successfully Disconnected from the MQTT Server!")
+    elif rc == 1:
+        print("Unexpected Disconnection : Protocol error.")
+    elif rc == 2:
+        print("Unexpected Disconnection : Network issue.")
+    elif rc == 3:
+        print("Unexpected Disconnection : Client disconnected by broker.")
+    elif rc == 4:
+        print("Unexpected Disconnection : Bad username or password.")
+    elif rc == 5:
+        print("Unexpected Disconnection : Not authorized.")
+    else:
+        print(f"Unexpected Disconnection : Unknown reason [ Return code: {rc} ]")
 
 
 def on_message(client, userdata, msg):
@@ -167,7 +201,7 @@ def on_message(client, userdata, msg):
         message = json.loads(msg.payload)
         print(f"Received message: {message}")
     except Exception as error:
-        print(f"Failed to process message: {error}")
+        printMessage(STATUSCODE[0], "Failed to process message")
         import traceback
 
         traceback.print_exc()
@@ -184,7 +218,7 @@ def perform_update(client):
         client.publish(BROADCAST, msg)
 
     except Exception as error:
-        print(f"Failed to publish command: {error}")
+        printMessage(STATUSCODE[0], "Failed to publish command")
 
 
 def publish_command(client, operation, tester, testname=None):
@@ -201,7 +235,7 @@ def publish_command(client, operation, tester, testname=None):
         client.publish(TOPIC, msg)
 
     except Exception as error:
-        print(f"Failed to publish command: {error}")
+        printMessage(STATUSCODE[0], "Failed to publish command")
 
 
 def getUserInput():
@@ -227,26 +261,37 @@ def getUserInput():
             test_category_id = int(input("\nInput Test Category >>> ").strip())
             test_category_value = test_categories[(test_category_id - 1)]
         except Exception as error:
-            print(f"--[ ERROR ]--[ Invalid Test Category ]\n")
+            printMessage(STATUSCODE[0], "Invalid Test Category")
             exit()
 
         if test_category_value != "FALSE-POSITIVE":
             try:
-                if test_category_value in [
-                    "LAYER7-DOS",
-                    "BOT-ATTACKS",
-                    "APPLICATION-SCANNING-ATTACKS",
-                ]:
-                    filter_value = test_category_value
+                if (
+                    (test_category_value == "LAYER7-DOS")
+                    or (test_category_value == "BOT-ATTACKS")
+                    or (test_category_value == "APPLICATION-SCANNING-ATTACKS")
+                ):
+
+                    filterValue = ""
+
+                    if test_category_value == "LAYER7-DOS":
+                        filterValue = "LAYER7-DOS"
+
+                    elif test_category_value == "APPLICATION-SCANNING-ATTACKS":
+                        filterValue = "APPLICATION-SCANNING-ATTACKS"
+
+                    else:
+                        filterValue = "BOT-ATTACKS"
 
                     TEST_NAMES = next(
                         (
                             item["subtests"]
                             for item in TEST_INFO
-                            if item.get("category") == filter_value
+                            if item.get("category") == filterValue
                         ),
                         None,
                     )
+
                 else:
                     TEST_NAMES = sorted(
                         [
@@ -259,7 +304,7 @@ def getUserInput():
                 clear_screen()
 
             except Exception as error:
-                print(f"--[ ERROR ]--[ TEST INFO PARSE ERROR ]\n")
+                printMessage(STATUSCODE[0], "TEST INFO PARSE ERROR")
                 exit()
 
             print(f"\nTEST NAMES:\n")
@@ -270,8 +315,8 @@ def getUserInput():
                 test_code_value = int(input("\nInput Test Code >>> ").strip())
                 test_category = TEST_NAMES[(test_code_value - 1)]
             except Exception as error:
-                print(f"--[ ERROR ]--[ Invalid Test Code ]\n")
-                print(error)
+                printMessage(STATUSCODE[0], "Invalid Test Code")
+                # print(error)
                 exit()
         else:
             test_category = "FP"
@@ -288,7 +333,7 @@ def getUserInput():
             vendorcode = VENDORS[(vendorid - 1)]["code"]
             vendorname = VENDORS[(vendorid - 1)]["name"]
         except Exception as error:
-            print(f"--[ ERROR ]--[ Invalid Vendor Selected ]\n")
+            printMessage(STATUSCODE[0], "Invalid Vendor Selected")
             exit()
 
         clear_screen()
@@ -313,7 +358,7 @@ def getUserInput():
             else:
                 batch = f"B{batch}"
         except Exception as error:
-            print(f"--[ ERROR ]--[ Invalid Batch Number ]\n")
+            printMessage(STATUSCODE[0], "Invalid Batch Number")
             exit()
 
         clear_screen()
@@ -328,7 +373,7 @@ def getUserInput():
             else:
                 iteration = f"I{iteration}"
         except Exception as error:
-            print(f"--[ ERROR ]--[ Invalid Iteration Number ]\n")
+            printMessage(STATUSCODE[0], "Invalid Iteration Number")
             exit()
 
         clear_screen()
@@ -355,24 +400,43 @@ def getUserInput():
             return [tester, test_name]
         else:
             clear_screen()
-            print("\n--[ INFO ]--[ TEST INFORMATION DISCARDED ]\n")
-            exit()
+            printMessage(STATUSCODE[1], "TEST INFORMATION DISCARDED")
 
 
 def main():
+    global BROKER
+
     ############################################################################################
     # MQTT Connection...
-    client = mqtt.Client(CLIENT_ID)
-    client.username_pw_set(username=USERNAME, password=PASSWORD)
-    client.on_connect = on_connect
-    client.on_disconnect = on_disconnect
-    client.on_publish = on_publish
-    client.on_message = on_message
-    client.connect(BROKER, PORT, 60)
-    client.loop_start()
+    try:
+        printMessage(STATUSCODE[1], "Connecting to MQTT Server")
 
-    time.sleep(2)
-    clear_screen()
+        client = mqtt.Client(CLIENT_ID)
+        client.username_pw_set(username=USERNAME, password=PASSWORD)
+        client.on_connect = on_connect
+        client.on_disconnect = on_disconnect
+        client.on_publish = on_publish
+        client.on_message = on_message
+        client.connect(BROKER, PORT, 60)
+        client.loop_start()
+
+        time.sleep(2)
+        clear_screen()
+
+    except TimeoutError:
+        printMessage(STATUSCODE[0], "Connection Timed Out")
+        printMessage(STATUSCODE[1], "Checking Status of MQTT Server. Please Wait!")
+
+        if isMQTTServerUp(BROKER):
+            printMessage(STATUSCODE[1], "MQTT Server is ONLINE")
+        else:
+            printMessage(STATUSCODE[1], "MQTT Server is OFFLINE")
+
+        exit()
+
+    except Exception as error:
+        printMessage(STATUSCODE[0], error)
+        exit()
 
     ############################################################################################
     # GLOBAL INPUT VARIABLES...
@@ -442,6 +506,9 @@ def main():
             print("\nKeyboard Interrupt Detected! Exiting gracefully...")
             OPERATION = "stop"
             publish_command(client, OPERATION, TESTER)
+
+        except Exception as error:
+            printMessage(STATUSCODE[0], error)
 
         finally:
             client.loop_stop()
