@@ -7,6 +7,16 @@ from os import path as directoryPath
 from os.path import exists as checkExistence
 
 ############################################################################################
+# Banner function...
+
+
+def infoBanner():
+    print("\n[ WEBIDENCE-MQTT ] Developed By Aayush Rajthala!\n")
+
+
+infoBanner()
+
+############################################################################################
 # ENVIRONMENT FUNCTIONS & VARIABLES
 
 STATUSCODE = ["ERROR", "INFO", "SUCCESS"]
@@ -36,6 +46,8 @@ def clear_screen():
     else:
         os.system("clear")
 
+    infoBanner()
+
 
 def printMessage(type, message):
     colorCode = 33
@@ -50,7 +62,7 @@ def printMessage(type, message):
         type = "INFO"
         colorCode = 33
 
-    print(f"--[\033[1;{colorCode}m {type} \033[0m]--[ {message} ]\n")
+    print(f"\n--[\033[1;{colorCode}m {type} \033[0m]--[ {message} ]\n")
 
     return
 
@@ -114,13 +126,16 @@ def checkDependencies():
             else:
                 print(f"\033[1;32mFound \033[0m: {file}")
 
+        print("\n")
+
         if MISSING or EMPTY:
             exit()
 
         # If all files exist, return successfully
         return
+
     except Exception as error:
-        printMessage()
+        printMessage(STATUSCODE[0], error)
 
 
 if __name__ == "__main__":
